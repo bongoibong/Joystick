@@ -1,17 +1,143 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang='en'>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>To-Do List</title>
     <link rel="manifest" href="/manifest.json">
-    <link rel="stylesheet" href="/styles.css">
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service-worker.js').then(function(registration) {
+            console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        }, function(error) {
+            console.log('ServiceWorker registration failed: ', error);
+        });
+    }
+</script>
+
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Joystick Control</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        #joystick-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
 </head>
 <body>
-    <h1>To-Do List</h1>
-    <input type="text" id="new-task" placeholder="Add a new task">
-    <button id="add-task">Add</button>
-    <ul id="task-list"></ul>
-    <script src="/script.js"></script>
+    <div id='joystick-container'>
+        <canvas id='joystick'></canvas>
+    </div>
+    <script>
+        var canvas = document.getElementById('joystick');
+        var ctx = canvas.getContext('2d');
+        var centerX, centerY, outerRadius, knobRadius;
+        var knobX, knobY, dragging = false;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            centerX = canvas.width / 2;
+            centerY = canvas.height / 2;
+            outerRadius = Math.min(canvas.width, canvas.height) * 0.3;
+            knobRadius = outerRadius * 0.4;
+            knobX = centerX;
+            knobY = centerY;
+            drawJoystick(knobX, knobY);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawJoystick(x, y) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI, false);
+            ctx.strokeStyle = '#555555';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(x, y, knobRadius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = '#66FFCC';
+            ctx.fill();
+        }
+
+        function handleMove(x, y) {
+            knobX = x;
+            knobY = y;
+            if (Math.sqrt((knobX - centerX) ** 2 + (knobY - centerY) ** 2) > outerRadius) {
+                var angle = Math.atan2(knobY - centerY, knobX - centerX);
+                knobX = centerX + outerRadius * Math.cos(angle);
+                knobY = centerY + outerRadius * Math.sin(angle);
+            }
+            drawJoystick(knobX, knobY);
+
+            var mappedX = Math.round((knobX - (centerX - outerRadius)) / (outerRadius * 2) * 1023);
+            var mappedY = Math.round((centerY + outerRadius - knobY) /  (outerRadius * 2) * 1023);
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/move?x=' + mappedX + '&y=' + mappedY, true);
+            xhr.send();
+        }
+
+        canvas.addEventListener('mousedown', function(event) {
+            var rect = canvas.getBoundingClientRect();
+            var x = event.clientX - rect.left;
+            var y = event.clientY - rect.top;
+            if (Math.sqrt((x - knobX) ** 2 + (y - knobY) ** 2) < knobRadius) {
+                dragging = true;
+            }
+        });
+
+        canvas.addEventListener('mousemove', function(event) {
+            if (dragging) {
+                var rect = canvas.getBoundingClientRect();
+                handleMove(event.clientX - rect.left, event.clientY - rect.top);
+            }
+        });
+
+        canvas.addEventListener('mouseup', function(event) {
+            dragging = false;
+            handleMove(centerX, centerY);
+        });
+
+        canvas.addEventListener('mouseleave', function(event) {
+            dragging = false;
+            handleMove(centerX, centerY);
+        });
+
+        canvas.addEventListener('touchstart', function(event) {
+            var rect = canvas.getBoundingClientRect();
+            var x = event.touches[0].clientX - rect.left;
+            var y = event.touches[0].clientY - rect.top;
+            if (Math.sqrt((x - knobX) ** 2 + (y - knobY) ** 2) < knobRadius) {
+                dragging = true;
+            }
+        });
+
+        canvas.addEventListener('touchmove', function(event) {
+            if (dragging) {
+                var rect = canvas.getBoundingClientRect();
+                handleMove(event.touches[0].clientX - rect.left, event.touches[0].clientY - rect.top);
+            }
+        });
+
+        canvas.addEventListener('touchend', function(event) {
+            dragging = false;
+            handleMove(centerX, centerY);
+        });
+    </script>
 </body>
 </html>
